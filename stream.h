@@ -36,6 +36,7 @@ struct stream {
     unsigned long int last;
     struct stream *prev;
     struct stream *next;
+    char request[1024];
 };
 
 int stream_init(struct context *);

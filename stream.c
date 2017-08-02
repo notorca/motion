@@ -959,6 +959,57 @@ static void stream_add_client(struct stream *list, int sc)
     if ((new->tmpbuffer = stream_tmpbuffer(sizeof(header))) == NULL) {
         MOTION_LOG(ERR, TYPE_STREAM, SHOW_ERRNO, "Error creating tmpbuffer in stream_add_client");
     } else {
+        /* WIP Read client request and save it */
+        char buffer[1024] = {'\0'};
+        ssize_t length = 1023;
+        int flags;
+
+        /* Set socket to blocking */
+        if ((flags = fcntl(sc, F_GETFL, 0)) < 0) {
+            MOTION_LOG(ERR, TYPE_STREAM, SHOW_ERRNO, "fcntl");
+        }
+        if (fcntl(sc, F_SETFL, flags & (~O_NONBLOCK)) < 0) {
+            MOTION_LOG(ERR, TYPE_STREAM, SHOW_ERRNO, "fcntl");
+        }
+
+        /* read http request */
+        if (!read_http_request (sc, buffer, length, NULL, 0))
+        {
+            /* log invalid request, but ignore it and continue */
+            strcpy (new->request, "/");
+            MOTION_LOG (NTC, TYPE_ALL, NO_ERRNO, "Invalid request");
+            MOTION_LOG (INF, TYPE_ALL, NO_ERRNO, "Request was: %s", buffer);
+        }
+        else
+        {
+            /* try to parse and extract the request */
+            char *p = buffer;
+
+            /* find first new line occurance */
+            while (p != NULL && *p != '\n' && *p != '\0')
+                p++;
+            if (p != NULL)
+                *p = '\0';
+
+            p = buffer;
+            /* find first space occurance */
+            while (p != NULL && *p != ' ' && *p != '\0')
+                p++;
+            /* skip multiple spaces */
+            while (p != NULL && *p == ' ' && *p != '\0')
+                p++;
+            /* find second space occurance */
+            char *end = p;
+            while (end != NULL && *end != ' ' && *end != '\0')
+                end++;
+            if (end != NULL)
+                *end = '\0';
+
+            /* copy only path, which should be between METHOD and HTTP_VERSION */
+            strncpy (new->request, p, 1023);
+        }
+
+        MOTION_LOG (NTC, TYPE_ALL, NO_ERRNO, "Saved request: %s", new->request);
         memcpy(new->tmpbuffer->ptr, header, sizeof(header)-1);
         new->tmpbuffer->size = sizeof(header)-1;
     }
